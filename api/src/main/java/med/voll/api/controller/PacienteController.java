@@ -41,9 +41,9 @@ public class PacienteController {
 
         //muestra los pacientes
         @GetMapping
-        public Page<DatosListadoPaciente> listadoPacientes(@PageableDefault(size = 5) Pageable paginacion){
+        public ResponseEntity<Page<DatosListadoPaciente>> listadoPacientes(@PageableDefault(size = 5) Pageable paginacion){
                 //return pacienteRepository.findAll().stream().map(DatosListadoPaciente::new).toList();
-                return pacienteRepository.findByActivoTrue(paginacion).map(DatosListadoPaciente::new);
+                return ResponseEntity.ok(pacienteRepository.findByActivoTrue(paginacion).map(DatosListadoPaciente::new));
         }
 
         @PutMapping
@@ -66,6 +66,18 @@ public class PacienteController {
                 Paciente paciente = pacienteRepository.getReferenceById(id);
                 paciente.desactivarPaciente();
                 return ResponseEntity.noContent().build();
+        }
+
+        @GetMapping("/{id}")
+
+        public ResponseEntity<DatosRepuestaPaciente> retornaDatosMedicos(@PathVariable Long id){
+                Paciente paciente = pacienteRepository.getReferenceById(id);
+                var datosPaciente = new DatosRepuestaPaciente(paciente.getId(), paciente.getNombre(), paciente.getEmail(), paciente.getTelefono(), paciente.getDocumento(),
+                        paciente.getSeguro(),
+                        new DatosDireccionP(paciente.getDireccionP().getUrbanizacion(),paciente.getDireccionP().getDistrito(), paciente.getDireccionP().getCodigoPostal(),
+                                paciente.getDireccionP().getComplemento(), paciente.getDireccionP().getNumero(),paciente.getDireccionP().getProvincia(),
+                                paciente.getDireccionP().getCiudad()));
+                return ResponseEntity.ok(datosPaciente );
         }
 }
 
