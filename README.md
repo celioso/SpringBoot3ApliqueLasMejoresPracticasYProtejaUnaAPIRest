@@ -38,3 +38,222 @@ El error 503 significa que el servicio al que se accede no está disponible temp
 
 ### Un consejo final:
 Difícilmente podemos guardar en nuestra cabeza lo que significa cada código, por lo que hay sitios web en Internet que tienen todos los códigos y significados para que podamos consultar cuando sea necesario. Hay dos sitios muy conocidos que usan los desarrolladores, uno para cada preferencia: si te gustan los gatos, puedes usar [HTTP Cats](https://http.cat/ "HTTP Cats"); ya, si prefieres perros, usa [HTTP Dogs](https://http.dog/ "HTTP Dogs").
+
+### Haga lo que hicimos: ResponseEntity
+¡Ahora está contigo! Realice el mismo procedimiento que hice en clase, implementando `ResponseEntity`, sin embargo, para las funcionalidades del CRUD de los pacientes.
+
+Deberá cambiar todos los métodos de la clase `PacienteController` para que devuelvan el objeto `ResponseEntity`, de la misma manera que se demostró en clase para la clase `MedicoController`:
+
+```java
+@PostMapping
+@Transactional
+public ResponseEntity registrar(@RequestBody @Valid DatosRegistroPaciente datos, UriComponentsBuilder uriBuilder) {
+    var paciente = new Paciente(datos);
+    repository.save(paciente);
+
+    var uri = uriBuilder.path("/pacientes/{id}").buildAndExpand(paciente.getId()).toUri();
+    return ResponseEntity.created(uri).body(new DatosDetalladoPaciente(paciente));
+}
+
+@GetMapping
+public ResponseEntity<Page<DatosListadoPaciente>> listar(@PageableDefault(size = 10, sort = {"nombre"}) Pageable paginacion) {
+    var page = repository.findAllByAtivoTrue(paginacion).map(DatosListadoPaciente::new);
+    return ResponseEntity.ok(page);
+}
+
+@PutMapping
+@Transactional
+public ResponseEntity actualizar(@RequestBody @Valid DatosActualizacionPaciente datos) {
+    var paciente = repository.getReferenceById(datos.id());
+    paciente.actualizarInformacion(datos);
+
+    return ResponseEntity.ok(new DatosDetalladoPaciente(paciente));
+}
+
+@DeleteMapping("/{id}")
+@Transactional
+public ResponseEntity eliminar(@PathVariable Long id) {
+    var paciente = repository.getReferenceById(id);
+    paciente.eliminar();
+
+    return ResponseEntity.noContent().build();
+}
+```
+Además, debe crear un método más en este Controller, que se encargará de devolver los datos de un paciente:
+```java
+@GetMapping("/{id}")
+public ResponseEntity detallar(@PathVariable Long id) {
+    var paciente = repository.getReferenceById(id);
+    return ResponseEntity.ok(new DatosDetalladoPaciente(paciente));
+}
+```
+También necesita crear el DTO `DatosDetalladoPaciente`:
+
+```java
+public record DatosDetalladoPaciente(String nombre, String email, String telefono, String documentoIdentidad, Direccion direccion) { 
+    public DatosDetalladoPaciente(Paciente paciente) { 
+        this(paciente.getNombre(), paciente.getEmail(), paciente.getTelefono(), paciente.getDocumentoIdentidad(), paciente.getDireccion()); 
+    }
+} 
+```
+
+### Lo que aprendimos
+
+En esta clase, aprendiste a:
+
+- Usar la clase ResponseEntity, de Spring, para personalizar los retornos de los métodos de una clase Controller;
+- Modificar el código HTTP devuelto en las respuestas de la API;
+- Agregar encabezados a las respuestas de la API;
+- Utilice los códigos HTTP más apropiados para cada operación realizada en la API.
+
+### Proyecto del aula anterior
+
+¿Comenzando en esta etapa? Aquí puedes descargar los archivos del proyecto que hemos avanzado hasta el aula anterior.
+
+[Descargue los archivos en Github](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/tree/clase-1 "Descargue los archivos en Github") o haga clic[ aquí](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/archive/refs/heads/clase-1.zip " aquí") para descargarlos directamente.
+
+### Para saber más: propiedades de Spring Boot
+
+A lo largo de los cursos, tuvimos que agregar algunas propiedades al archivo application.properties para hacer configuraciones en el proyecto, como, por ejemplo, configuraciones de acceso a la base de datos.
+
+Spring Boot tiene cientos de propiedades que podemos incluir en este archivo, por lo que es imposible memorizarlas todas. Por ello, es importante conocer la documentación que enumera todas estas propiedades, ya que eventualmente necesitaremos consultarla.
+
+Puede acceder a la documentación oficial en el enlace: Common Application Properties.
+
+### Para saber más: propiedades de Spring Boot
+
+A lo largo de los cursos, tuvimos que agregar algunas propiedades al archivo `application.properties` para hacer configuraciones en el proyecto, como, por ejemplo, configuraciones de acceso a la base de datos.
+
+Spring Boot tiene cientos de propiedades que podemos incluir en este archivo, por lo que es imposible memorizarlas todas. Por ello, es importante conocer la documentación que enumera todas estas propiedades, ya que eventualmente necesitaremos consultarla.
+
+Puede acceder a la documentación oficial en el enlace: [Common Application Properties](https://docs.spring.io/spring-boot/docs/current/reference/html/application-properties.html "Common Application Properties").
+
+### Para saber más: mensajes en español
+
+Por defecto, Bean Validation devuelve mensajes de error en inglés, sin embargo, hay una traducción de estos mensajes al español ya implementada en esta especificación.
+
+En el protocolo HTTP hay un encabezado llamado Accept-Language, que sirve para indicar al servidor el idioma preferido del cliente que activa la solicitud. Podemos utilizar esta cabecera para indicarle a Spring el idioma deseado, para que en la integración con Bean Validation pueda buscar mensajes según el idioma indicado.
+
+En Insomnia, y también en otras herramientas similares, existe una opción llamada Header en la que podemos incluir cabeceras a enviar en la petición. Si agregamos el encabezado Accept-Language con el valor es, los mensajes de error de Bean Validation se devolverán automáticamente en español.
+
+Nota: Bean Validation solo traduce los mensajes de error a unos pocos idiomas.
+
+### Para saber más: personalización de mensajes de error
+
+Es posible que haya notado que Bean Validation tiene un mensaje de error para cada una de sus anotaciones. Por ejemplo, cuando la validación falla en algún atributo anotado con `@NotBlank`, el mensaje de error será: must not be blank.
+
+Estos mensajes de error no se definieron en la aplicación, ya que son mensajes de error estándar de Bean Validation. Sin embargo, si lo desea, puede personalizar dichos mensajes.
+
+Una de las formas de personalizar los mensajes de error es agregar el atributo del mensaje a las anotaciones de validación:
+
+```java
+public record DatosCadastroMedico(
+    @NotBlank(message = "Nombre es obligatorio")
+    String nombre,
+
+    @NotBlank(message = "Email es obligatorio")
+    @Email(message = "Formato de email es inválido")
+    String email,
+
+    @NotBlank(message = "Teléfono es obligatorio")
+    String telefono,
+
+    @NotBlank(message = "CRM es obligatorio")
+    @Pattern(regexp = "\\d{4,6}", message = "Formato do CRM es inválido")
+    String crm,
+
+    @NotNull(message = "Especialidad es obligatorio")
+    Especialidad especialidad,
+
+    @NotNull(message = "Datos de dirección son obligatorios")
+    @Valid DatosDireccion direccion) {}
+```
+
+Otra forma es aislar los mensajes en un archivo de propiedades, que debe tener el nombre ValidationMessages.properties y estar creado en el directorio src/main/resources:
+
+```java
+nombre.obligatorio=El nombre es obligatorio
+email.obligatorio=Correo electrónico requerido
+email.invalido=El formato del correo electrónico no es válido
+phone.obligatorio=Teléfono requerido
+crm.obligatorio=CRM es obligatorio
+crm.invalido=El formato CRM no es válido
+especialidad.obligatorio=La especialidad es obligatoria
+address.obligatorio=Los datos de dirección son obligatorios
+```
+
+Y, en las anotaciones, indicar la clave de las propiedades por el propio atributo `message`, delimitando con los caracteres { e }:
+
+```java
+public record DatosRegistroMedico(
+    @NotBlank(message = "{nombre.obligatorio}")
+    String nombre,
+
+    @NotBlank(message = "{email.obligatorio}")
+    @Email(message = "{email.invalido}")
+    String email,
+
+    @NotBlank(message = "{telefono.obligatorio}")
+    String telefono,
+
+    @NotBlank(message = "{crm.obligatorio}")
+    @Pattern(regexp = "\\d{4,6}", message = "{crm.invalido}")
+    String crm,
+
+    @NotNull(message = "{especialidad.obligatorio}")
+    Especialidad especialidad,
+
+    @NotNull(message = "{direccion.obligatorio}")
+    @Valid DatosDireccion direccion) {}
+```
+
+### Haga lo que hicimos: RestControllerAdvice
+
+¡Ahora está contigo! Realice el mismo procedimiento que hice en clase, creando una clase responsable de manejar las excepciones que pueden ocurrir en las clases Controller.
+
+Deberá crear una clase similar a esta:
+
+```java
+@RestControllerAdvice
+public class ManejadorDeErrores {
+
+@ExceptionHandler(EntityNotFoundException.class)
+public ResponseEntity manejarError404() {
+    return ResponseEntity.notFound().build();
+}
+
+@ExceptionHandler(MethodArgumentNotValidException.class)
+public ResponseEntity manejarErro400(MethodArgumentNotValidException ex) {
+    var errores = ex.getFieldErrors();
+    return ResponseEntity.badRequest().body(errores.stream().map(DatosErrorValidacion::new).toList());
+}
+
+private record DatosErrorValidacion(String campo, String mensaje) {
+    public DatosErrorValidacion(FieldError error) {
+        this(error.getField(), error.getDefaultMessage());
+    }
+}
+}
+```
+
+Además, también debe agregar la siguiente propiedad al archivo application.properties para evitar que el stacktracer de la excepción sea devuelto en el cuerpo de la respuesta:
+
+```java
+server.error.include-stacktrace=never
+```
+
+### Lo que aprendimos
+
+En esta clase, aprendiste a:
+
+- Crear una clase para aislar el manejo de excepciones de API, utilizando la anotación `@RestControllerAdvice`;
+- Utilizar la anotación `@ExceptionHandler`, de Spring, para indicar qué excepción debe capturar un determinado método de la clase de manejo de errores;
+- Manejar errores 404 (Not Found) en la clase de manejo de errores;
+- Manejar errores 400 (Bad Request), para errores de validación de Bean Validation, en la clase de manejo de errores;
+- Simplificar el JSON devuelto por la API en casos de error de validación de Bean Validation.
+
+### Proyecto del aula anterior
+
+¿Comenzando en esta etapa? Aquí puedes descargar los archivos del proyecto que hemos avanzado hasta el aula anterior.
+
+[Descargue los archivos en Github](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/tree/clase-2 "Descargue los archivos en Github") o haga clic [aquí](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/archive/refs/heads/clase-2.zip "aquí") para descargarlos directamente.
