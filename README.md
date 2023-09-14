@@ -284,3 +284,177 @@ Como aprendimos en videos anteriores, Spring Data usa su propio patrón de nomen
 Hay algunas palabras reservadas que debemos usar en los nombres de los métodos, como *findBy* y *existBy*, para indicarle a Spring Data cómo debe ensamblar la consulta que queremos. Esta característica es bastante flexible y puede ser un poco compleja debido a las diversas posibilidades existentes.
 
 Para conocer más detalles y comprender mejor cómo ensamblar consultas dinámicas con Spring Data, acceda a su [documentación oficial](https://docs.spring.io/spring-data/jpa/docs/current/reference/html/ "documentación oficial").
+
+### Haga lo que hicimos: autenticación API
+
+¡Ahora está contigo! Realice el mismo procedimiento que hice en clase, implementando el proceso de autenticación en la API.
+
+Primero, deberá agregar Spring Security al proyecto, incluidas estas dependencias en el pom.xml:
+
+```java
+<dependency>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-security</artifactId>
+</dependency>
+
+<dependency>
+    <groupId>org.springframework.security</groupId
+    <artifactId>spring-security-test</artifactId>
+    <scope>test</scope>
+</dependency>
+```
+
+Después de eso, deberá crear las clases *Usuario*, *UsuarioRepository* y *AutenticacionService* en el proyecto, como se muestra a continuación:
+
+```java
+@Table(name = "usuarios")
+@Entity(name = "Usuario")
+@Getter
+@NoArgsConstructor
+@AllArgsConstructor
+@EqualsAndHashCode(of = "id")
+public class Usuario implements UserDetails {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    private String login;
+    private String contrasena;
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+    }
+
+    @Override
+    public String getPassword() {
+        return contrasena;
+    }
+
+    @Override
+    public String getUsername() {
+        return login;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isAccountNonLocked() {
+        return true;
+    }
+
+    @Override
+    public boolean isCredentialsNonExpired() {
+        return true;
+    }
+
+    @Override
+    public boolean isEnabled() {
+        return true;
+    }
+}
+```
+```java
+public interface UsuarioRepository extends JpaRepository<Usuario, Long> {
+    UserDetails findByLogin(String login);
+}
+```
+
+```java
+@Service
+public class AutenticacionService implements UserDetailsService {
+
+    @Autowired
+    private UsuarioRepository repository;
+
+    @Override
+    public UserDetails loadUserByUsername(String username) throws UsernameNotFoundException {
+        return repository.findByLogin(username);
+    }
+}
+```
+
+También debe crear una nueva migración en el proyecto para crear la tabla de usuario (IMPORTANTE: ¡recuerde detener el proyecto antes de crear la nueva migración!):
+
+```java
+create table usuarios(
+    id bigint not null auto_increment,
+    login varchar(100) not null,
+    contrasena varchar(255) not null,
+
+    primary key(id)
+);
+```
+
+Además, también deberá crear la clase con la configuración de seguridad de la API:
+
+```java
+@Configuration
+@EnableWebSecurity
+public class SecurityConfigurations {
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http.csrf().disable()
+                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                .and().build();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+        return configuration.getAuthenticationManager();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+```
+
+Finalmente, deberá crear una clase Controller y un DTO para manejar las solicitudes de autenticación en la API:
+
+```java
+@RestController
+@RequestMapping("/login")
+public class AutenticacionController {
+
+    @Autowired
+    private AuthenticationManager manager;
+
+    @PostMapping
+    public ResponseEntity realizarLogin(@RequestBody @Valid DatosAutenticacion datos) {
+        var token = new UsernamePasswordAuthenticationToken(datos.login(), datos.contrasena());
+        var authenticaon = manager.authenticate(token);
+
+        return ResponseEntity.ok().build();
+    }
+}
+```
+```java
+public record DatosAutenticacion(String login, String contrasena) {
+}
+```
+
+Para probar la autenticación, deberá insertar un registro de usuario en su base de datos, en la tabla de usuarios:
+```java
+insert into usuarios values(1, 'ana.souza@voll.med', '$2a$10$Y50UaMFOxteibQEYLrwuHeehHYfcoafCopUazP12.rqB41bsolF5.');
+```
+
+### Lo que aprendimos
+
+En esta clase, aprendiste a:
+
+- Identificar cómo funciona el proceso de autenticación y autorización en una API Rest;
+- Agregar Spring Security al proyecto;
+- Cómo funciona el comportamiento padrón de Spring Security en una aplicación;
+- Implementar el proceso de autenticación en la API, de forma Stateless, utilizando clases y configuraciones de Spring Security.
+
+### Proyecto del aula anterior
+
+¿Comenzando en esta etapa? Aquí puedes descargar los archivos del proyecto que hemos avanzado hasta el aula anterior.
+
+[Descargue los archivos en Github](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/tree/clase-3 "Descargue los archivos en Github") o haga clic [aquí](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/archive/refs/heads/clase-3.zip "aquí") para descargarlos directamente.
