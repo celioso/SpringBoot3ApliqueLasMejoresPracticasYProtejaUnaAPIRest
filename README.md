@@ -458,3 +458,112 @@ En esta clase, aprendiste a:
 ¿Comenzando en esta etapa? Aquí puedes descargar los archivos del proyecto que hemos avanzado hasta el aula anterior.
 
 [Descargue los archivos en Github](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/tree/clase-3 "Descargue los archivos en Github") o haga clic [aquí](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/archive/refs/heads/clase-3.zip "aquí") para descargarlos directamente.
+
+### Para saber más: otra información sobre el Token
+
+Además del Issuer, Subject y fecha de expiración, podemos incluir otra información en el token JWT, según las necesidades de la aplicación. Por ejemplo, podemos incluir el id del usuario en el token, simplemente usando el método `withClaim`:
+
+```java
+return JWT.create()
+    .withIssuer("API Voll.med")
+    .withSubject(usuario.getLogin())
+
+    .withClaim("id", usuario.getId())
+
+    .withExpiresAt(fechaExpiracion())
+    .sign(algoritmo);
+```
+
+El método `withClaim` recibe dos parámetros, el primero es un String que identifica el nombre del claim (propiedad almacenada en el token), y el segundo la información a almacenar.
+
+###  Haga lo que hicimos: generación de tokens
+
+¡Ahora está contigo! Realice el mismo procedimiento que hice en clase, implementando la generación de tokens JWT cuando un usuario se autentica en la API.
+
+Primero, deberá agregar la biblioteca Auth0 java-jwt a su proyecto, incluida esta dependencia en su pom.xml:
+
+```java
+<dependency>
+    <groupId>com.auth0</groupId>
+    <artifactId>java-jwt</artifactId>
+    <version>4.2.1</version>
+</dependency>
+```
+
+A continuación, será necesario crear la clase encargada de generar los tokens:
+
+```java
+@Service
+public class TokenService {
+
+    @Value("${api.security.token.secret}")
+    private String secret;
+
+    public String generarToken(Usuario usuario) {
+        try {
+            var algoritmo = Algorithm.HMAC256(secret);
+            return JWT.create()
+                    .withIssuer("API Voll.med")
+                    .withSubject(usuario.getLogin())
+                    .withExpiresAt(fechaExpiracion())
+                    .sign(algoritmo);
+        } catch (JWTCreationException exception){
+            throw new RuntimeException("error al generar el  token jwt", exception);
+        }
+    }
+
+    private Instant fechaExpiracion() {
+        return LocalDateTime.now().plusHours(2).toInstant(ZoneOffset.of("-03:00"));
+    }
+
+}
+```
+
+También deberá agregar la siguiente propiedad al archivo `application.properties`:
+
+```java
+api.security.token.secret=${JWT_SECRET:12345678}
+```
+
+Finalmente, será necesario crear el DTO DatosTokenJWT y cambiar la clase AutenticacionController:
+
+```java
+public record DatosTokenJWT(String token) {}
+@RestController
+@RequestMapping("/login")
+public class AutenticacionController {
+
+    @Autowired
+    private AuthenticationManager manager;
+
+    @Autowired
+    private TokenService tokenService;
+
+    @PostMapping
+    public ResponseEntity  realizarLogin(@RequestBody @Valid DatosAutenticacion datos) {
+        var authenticationToken = new UsernamePasswordAuthenticationToken(datos.login(), datos.contrasena());
+        var authentication = manager.authenticate(authenticationToken);
+
+        var tokenJWT = tokenService.generarToken((Usuario) authentication.getPrincipal());
+
+        return ResponseEntity.ok(new DatosTokenJWT(tokenJWT));
+    }
+
+}
+```
+
+### Lo que aprendimos
+
+¿Qué hemos aprendido?
+
+- En esta clase, aprendiste a:
+- Agregar la biblioteca `Auth0 java-jwt` como una dependencia del proyecto;
+- Utilizar esta biblioteca para generar un token en la API;
+- Inyectar una propiedad del archivo `application.properties` en una clase administrada por Spring, usando la anotación `@Value`;
+- Devolver un token generado en la API cuando un usuario se autentica.
+
+### Proyecto del aula anterior
+
+¿Comenzando en esta etapa? Aquí puedes descargar los archivos del proyecto que hemos avanzado hasta el aula anterior.
+
+[Descargue los archivos en Github ](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/tree/clase-4 "Descargue los archivos en Github ")o haga clic [aquí](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/archive/refs/heads/clase-4.zip "aquí") para descargarlos directamente.
