@@ -623,4 +623,180 @@ public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Excepti
             .and().build();
 }
 ```
+### Para saber más: control de acceso por url
 
+En la aplicación utilizada en el curso, no tendremos diferentes perfiles de acceso para los usuarios. Sin embargo, esta característica se usa en algunas aplicaciones y podemos indicarle a Spring Security que solo los usuarios que tienen un perfil específico pueden acceder a ciertas URL.
+
+Por ejemplo, supongamos que en nuestra aplicación tenemos un perfil de acceso llamado ADMIN, y solo los usuarios con ese perfil pueden eliminar médicos y pacientes. Podemos indicar dicha configuración a Spring Security cambiando el método `securityFilterChain`, en la clase `SecurityConfigurations`, de la siguiente manera:
+
+```java
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    return http.csrf().disable()
+        .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+        .and().authorizeRequests()
+        .antMatchers(HttpMethod.POST, "/login").permitAll()
+        .antMatchers(HttpMethod.DELETE, "/medicos").hasRole("ADMIN")
+        .antMatchers(HttpMethod.DELETE, "/pacientes").hasRole("ADMIN")
+        .anyRequest().authenticated()
+        .and().addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
+        .build();
+}
+```
+
+Tenga en cuenta que se agregaron dos líneas al código anterior, indicando a Spring Security que las solicitudes de tipo `DELETE` de las URL `/médicos` y `/pacientes` solo pueden ser ejecutadas por usuarios autenticados y cuyo perfil de acceso es ADMIN.
+
+### Para saber más: control de acceso a anotaciones
+
+Otra forma de restringir el acceso a ciertas funciones, según el perfil del usuario, es usar una función de Spring Security conocida como Method Security, que funciona con el uso de anotaciones en los métodos:
+
+```java
+@GetMapping("/{id}")
+@Secured("ROLE_ADMIN")
+public ResponseEntity detallar(@PathVariable Long id) {
+    var medico = repository.getReferenceById(id);
+    return ResponseEntity.ok(new DatosDetalladoMedico(medico));
+}
+```
+
+En el ejemplo de código anterior, el método se anotó con `@Secured("ROLE_ADMIN")`, de modo que sólo los usuarios con el rol ADMIN pueden activar solicitudes para detallar a un médico. La anotación `@Secured` se puede agregar en métodos individuales o incluso en la clase, lo que sería el equivalente a agregarla en todos los métodos.
+
+¡Atención! Por defecto esta característica está deshabilitada en Spring Security, y para usarla debemos agregar la siguiente anotación en la clase `Securityconfigurations` del proyecto:
+
+`@EnableMethodSecurity(securedEnabled = true)`
+
+Puede obtener más detalles sobre la función de seguridad del método en la documentación de Spring Security, disponible en:
+
+- [Method Security](https://docs.spring.io/spring-security/reference/servlet/authorization/method-security.html "Method Security")
+
+### Haga lo que hicimos: autorización de solicitudes
+
+Ahora está contigo! Realice el mismo procedimiento que hice en clase, implementando los códigos necesarios para realizar el control de acceso en la API.
+
+Deberá crear una clase de `Filter`, responsable de interceptar solicitudes y realizar el proceso de autenticación y autorización:
+
+```java 
+@Component
+public class SecurityFilter extends OncePerRequestFilter {
+
+    @Autowired
+    private TokenService tokenService;
+
+    @Autowired
+    private UsuarioRepository repository;
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        var tokenJWT = recuperarToken(request);
+
+        if (tokenJWT != null) {
+            var subject = tokenService.getSubject(tokenJWT);
+            var usuario = repository.findByLogin(subject);
+
+            var authentication = new UsernamePasswordAuthenticationToken(usuario, null, usuario.getAuthorities());
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
+
+        filterChain.doFilter(request, response);
+    }
+
+    private String recuperarToken(HttpServletRequest request) {
+        var authorizationHeader = request.getHeader("Authorization");
+        if (authorizationHeader != null) {
+            return authorizationHeader.replace("Bearer ", "");
+        }
+
+        return null;
+    }
+
+}
+```
+
+También deberá actualizar el código de la clase `SecurityConfigurations`:
+
+```java 
+@Configuration
+@EnableWebSecurity
+public class SecurityConfigurations {
+
+    @Autowired
+    private SecurityFilter securityFilter;
+
+    @Bean
+    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+        return http.csrf().disable()
+                .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+                .and().authorizeRequests()
+                .antMatchers(HttpMethod.POST, "/login").permitAll()
+                .anyRequest().authenticated()
+                .and().addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class)
+                .build();
+    }
+
+    @Bean
+    public AuthenticationManager authenticationManager(AuthenticationConfiguration configuration) throws Exception {
+        return configuration.getAuthenticationManager();
+    }
+
+    @Bean
+    public PasswordEncoder passwordEncoder() {
+        return new BCryptPasswordEncoder();
+    }
+}
+```
+Y finalmente, deberá actualizar el código de la clase `TokenService`:
+```java 
+@Service
+public class TokenService {
+
+    @Value("${api.security.token.secret}")
+    private String secret;
+
+    public String generarToken(Usuario usuario) {
+        try {
+            var algoritmo = Algorithm.HMAC256(secret);
+            return JWT.create()
+                    .withIssuer("API Voll.med")
+                    .withSubject(usuario.getLogin())
+                    .withExpiresAt(fechaExpiracion())
+                    .sign(algoritmo);
+        } catch (JWTCreationException exception){
+            throw new RuntimeException("error al generar token jwt", exception);
+        }
+    }
+
+    public String getSubject(String tokenJWT) {
+        try {
+            var algoritmo = Algorithm.HMAC256(secret);
+            return JWT.require(algoritmo)
+                    .withIssuer("API Voll.med")
+                    .build()
+                    .verify(tokenJWT)
+                    .getSubject();
+        } catch (JWTVerificationException exception) {
+            throw new RuntimeException("Token JWT inválido o expirado!");
+        }
+    }
+
+    private Instant fechaExpiracion() {
+        return LocalDateTime.now().plusHours(2).toInstant(ZoneOffset.of("-03:00"));
+    }
+
+}
+```
+
+### Proyecto final
+
+Aquí puedes descargar los archivos del proyecto completo.
+
+[Descargue los archivos en Github](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/tree/clase-5 "Descargue los archivos en Github") o haga clic [aquí](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/archive/refs/heads/clase-5.zip "aquí") para descargarlos directamente.
+
+### Lo que aprendimos
+
+En esta clase, aprendiste a:
+
+- Los Filters funcionan en una solicitud;
+- Implementar un Filter creando una clase que herede de la clase `OncePerRequestFilter` de Spring;
+- Utilizar la biblioteca Auth0 java-jwt para validar los tokens recibidos en la API;
+- Realizar el proceso de autenticación de la solicitud, utilizando la clase `SecurityContextHolder` de Spring;
+- Liberar y restringir solicitudes, según la URL y el verbo del protocolo HTTP.
