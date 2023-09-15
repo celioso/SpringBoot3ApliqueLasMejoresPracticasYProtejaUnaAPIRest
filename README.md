@@ -567,3 +567,60 @@ public class AutenticacionController {
 ¿Comenzando en esta etapa? Aquí puedes descargar los archivos del proyecto que hemos avanzado hasta el aula anterior.
 
 [Descargue los archivos en Github ](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/tree/clase-4 "Descargue los archivos en Github ")o haga clic [aquí](https://github.com/alura-es-cursos/spring-boot-buenas-practicas-security/archive/refs/heads/clase-4.zip "aquí") para descargarlos directamente.
+
+### Para saber más: filters
+
+Filter es una de las características que componen la especificación Servlets, que estandariza el manejo de solicitudes y respuestas en aplicaciones web en Java. Es decir, dicha función no es específica de Spring y, por lo tanto, puede usarse en cualquier aplicación Java.
+
+Es una característica muy útil para aislar códigos de infraestructura de la aplicación, como por ejemplo, seguridad, logs y auditoría, para que dichos códigos no se dupliquen y se mezclen con códigos relacionados con las reglas comerciales de la aplicación.
+
+Para crear un Filter, simplemente cree una clase e implemente la interfaz `Filter` en ella (paquete jakarta.servlet). Por ejemplo:
+
+````java
+@WebFilter(urlPatterns = "/api/**")
+public class LogFilter implements Filter {
+
+    @Override
+    public void doFilter(ServletRequest servletRequest, ServletResponse servletResponse, FilterChain filterChain) throws IOException, ServletException {
+        System.out.println("Requisição recebida em: " + LocalDateTime.now());
+        filterChain.doFilter(servletRequest, servletResponse);
+    }
+
+}
+```
+
+El método `doFilte`r es llamado por el servidor automáticamente, cada vez que este filter tiene que ser ejecutado, y la llamada al método `filterChain.doFilter` indica que los siguientes filters, si hay otros, pueden ser ejecutados. La anotación `@WebFilter`, agregada a la clase, indica al servidor en qué solicitudes se debe llamar a este filter, según la URL de la solicitud.
+
+En el curso, usaremos otra forma de implementar un filter, utilizando los recursos de Spring que facilitan su implementación.
+
+### Para saber más: AuthorizeRequests deprecated
+
+#### ¡Atención!
+En la versión final 3.0.0 de Spring Boot se realizó un cambio en Spring Security, en cuanto a códigos que restringen el control de acceso. A lo largo de las clases, el método `securityFilterChain(HttpSecurity http)`, declarado en la clase `SecurityConfigurations`, tenía la siguiente estructura:
+
+```java
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    return http.csrf().disable()
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and().authorizeRequests()
+            .antMatchers(HttpMethod.POST, "/login").permitAll()
+            .anyRequest().authenticated()
+            .and().build();
+}
+```
+
+Sin embargo, desde la versión final 3.0.0 de Spring Boot, el método authorizeRequests() ha quedado obsoleto y debe ser reemplazado por el nuevo método authorizeHttpRequests(). Asimismo, el método antMatchers() debería ser reemplazado por el nuevo método requestMatchers():
+
+```java
+@Bean
+public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    return http.csrf().disable()
+            .sessionManagement().sessionCreationPolicy(SessionCreationPolicy.STATELESS)
+            .and().authorizeHttpRequests()
+            .requestMatchers(HttpMethod.POST, "/login").permitAll()
+            .anyRequest().authenticated()
+            .and().build();
+}
+```
+
