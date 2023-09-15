@@ -576,7 +576,7 @@ Es una característica muy útil para aislar códigos de infraestructura de la a
 
 Para crear un Filter, simplemente cree una clase e implemente la interfaz `Filter` en ella (paquete jakarta.servlet). Por ejemplo:
 
-````java
+```java
 @WebFilter(urlPatterns = "/api/**")
 public class LogFilter implements Filter {
 
@@ -745,6 +745,7 @@ public class SecurityConfigurations {
 }
 ```
 Y finalmente, deberá actualizar el código de la clase `TokenService`:
+
 ```java 
 @Service
 public class TokenService {
